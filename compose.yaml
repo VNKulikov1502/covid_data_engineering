@@ -29,7 +29,7 @@ services:
       - projectnet
 
   spark-iceberg:
-    image: tabulario/spark-iceberg:latest
+    image: gazetdinovir/spark-iceberg:latest
     container_name: spark-iceberg
     hostname: spark-iceberg
     networks:
@@ -53,9 +53,7 @@ services:
     volumes:
       - ./dataset:/home/iceberg/notebooks/
       - ./configs/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
-      - ./jars/aws-java-sdk-bundle-1.12.262.jar:/opt/spark/jars/aws-java-sdk-bundle-1.12.262.jar
-      - ./jars/hadoop-aws-3.3.4.jar:/opt/spark/jars/hadoop-aws-3.3.4.jar
-      - ./jars/postgresql-42.7.3.jar:/opt/spark/jars/postgresql-42.7.3.jar
+      - ./configs/entrypoint.sh:/opt/spark/entrypoint.sh
       
 
   minio:
@@ -90,11 +88,10 @@ services:
       /usr/bin/mc rm -r --force minio/warehouse;
       /usr/bin/mc mb minio/warehouse;
       /usr/bin/mc anonymous set public minio/warehouse;
-      tail -f /dev/null
       "
-  postgres:
+  postgres_population:
     image: postgres:17
-    container_name: population_source
+    container_name: postgres_population
     networks:
       projectnet:
     environment:
@@ -104,7 +101,7 @@ services:
     ports:
       - 5432:5432
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - ./population_data:/var/lib/postgresql/data
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
@@ -122,9 +119,9 @@ services:
     networks:
       projectnet:
 
-  postgres:
+  postgres_alerts:
     image: postgres:17
-    container_name: alerts_pg
+    container_name: postgres_alerts
     networks:
       projectnet:
     environment:
