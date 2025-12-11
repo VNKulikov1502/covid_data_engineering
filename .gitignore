@@ -47,8 +47,9 @@ logs/
 .env
 *.log
 
-/jars
 /minio_data
 /population_data
 /alerts_data
-
+/airflow/airflow-db-data/
+/superset/superset-data
+/superset/superset-db-data

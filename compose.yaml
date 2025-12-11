@@ -55,7 +55,111 @@ services:
       - ./dataset:/home/iceberg/notebooks/
       - ./configs/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
       - ./configs/entrypoint.sh:/opt/spark/entrypoint.sh
-      
+
+  airflow-metadata:
+    image: postgres:17.6
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports:
+      - "5434:5432"
+    volumes:
+      - ./airflow/airflow-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "airflow" ]
+      interval: 5s
+      retries: 5
+    restart: always
+    networks:
+      - projectnet
+
+  airflow-scheduler:
+    image: my-custom-airflow:${AIRFLOW_VERSION:-2.4.1}
+    container_name: airflow-scheduler
+    build:
+      context: ./airflow/docker
+      dockerfile: Dockerfile
+      args:
+        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-2.4.1}
+    command: scheduler
+    healthcheck:
+      test: [ "CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"' ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+    user: "${AIRFLOW_UID:-50000}:0"
+    depends_on:
+      airflow-metadata:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    env_file:
+      - airflow/airflow.env
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+    networks:
+      - projectnet
+
+  airflow-webserver:
+    image: my-custom-airflow:${AIRFLOW_VERSION:-2.4.1}
+    container_name: airflow-webserver
+    build:
+      context: ./airflow/docker
+      dockerfile: Dockerfile
+      args:
+        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-2.4.1}
+    command: webserver
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8090/health" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+    user: "${AIRFLOW_UID:-50000}:0"
+    depends_on:
+      airflow-metadata:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    env_file:
+      - airflow/airflow.env
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+    ports:
+      - "8090:8080"
+    networks:
+      - projectnet
+
+  airflow-init:
+    image: my-custom-airflow:${AIRFLOW_VERSION:-2.4.1}
+    container_name: airflow-init
+    build:
+      context: ./airflow/docker
+      dockerfile: Dockerfile
+      args:
+        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-2.4.1}
+    entrypoint: /opt/airflow/scripts/entrypoint.sh
+    user: "${AIRFLOW_UID:-50000}:0"
+    depends_on:
+      airflow-metadata:
+        condition: service_healthy
+    env_file:
+      - airflow/airflow.env
+    environment:
+      _AIRFLOW_WWW_USER_USERNAME: airflow_user
+      _AIRFLOW_WWW_USER_FIRSTNAME: Airflow
+      _AIRFLOW_WWW_USER_LASTNAME: Admin
+      _AIRFLOW_WWW_USER_EMAIL: airflowadmin@example.com
+      _AIRFLOW_WWW_USER_ROLE: Admin
+      _AIRFLOW_WWW_USER_PASSWORD: airflow_password
+    volumes:
+      - ./airflow/scripts:/opt/airflow/scripts
+    networks:
+      - projectnet
 
   minio:
     image: minio/minio
@@ -90,6 +194,8 @@ services:
       /usr/bin/mc mb minio/warehouse;
       /usr/bin/mc anonymous set public minio/warehouse;
       "
+      
+
   postgres_population:
     image: postgres:17
     container_name: postgres_population
@@ -138,6 +244,49 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  superset-db:
+    image: postgres:17.6
+    container_name: superset-db
+    ports:
+      - 5435:5432
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: superset
+    volumes:
+      - ./superset/superset-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U superset -d superset" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - projectnet
+
+  superset:
+    container_name: superset
+    build:
+      context: ./superset
+      dockerfile: Dockerfile
+    environment:
+      SUPERSET_SECRET_KEY: 123456
+      DATABASE_DB: superset
+      DATABASE_HOST: superset-db
+      DATABASE_PASSWORD: superset
+      DATABASE_USER: superset
+      DATABASE_PORT: 5432
+    ports:
+      - "8089:8088"
+    depends_on:
+      superset-db:
+        condition: service_healthy
+    volumes:
+      - ./superset/superset-data:/app/superset_home
+      - ./superset/init-superset.sh:/app/init-superset.sh
+    command: [ "sh", "/app/init-superset.sh" ]
+    networks:
+      - projectnet
 
 
 networks:
