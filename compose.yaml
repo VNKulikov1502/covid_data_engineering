@@ -1,7 +1,102 @@
 services:
+  mariadb:
+    image: 'mariadb:10.11.2-jammy'
+    hostname: mariadb
+    container_name: mariadb
+    ports:
+      - '3306:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: admin
+      MYSQL_DATABASE: metastore_db
+    networks:
+      - projectnet
+
+  hive-metastore:
+    hostname: hive-metastore
+    container_name: hive-metastore
+    image: 'bitsondatadev/hive-metastore:latest'
+    ports:
+      - '9083:9083' # Metastore Thrift
+    volumes:
+      - ./metastore/metastore-site.xml:/opt/apache-hive-metastore-3.0.0-bin/conf/metastore-site.xml:ro
+    environment:
+      METASTORE_DB_HOSTNAME: mariadb
+    depends_on:
+      - mariadb
+    networks:
+      - projectnet
+
+  spark-iceberg:
+    image: tabulario/spark-iceberg:latest
+    container_name: spark-iceberg
+    hostname: spark-iceberg
+    networks:
+      projectnet:
+    depends_on:
+      - minio
+      - hive-metastore
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - SPARK_DRIVER_MEMORY=4g
+      - SPARK_EXECUTOR_MEMORY=4g
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=iceberg
+    ports:
+      - 8888:8888  # Jupyter Notebook
+      - 8080:8080  # Spark UI
+      - 10000:10000
+      - 10001:10001
+    volumes:
+      - ./dataset:/home/iceberg/notebooks/
+      - ./configs/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./jars/aws-java-sdk-bundle-1.12.262.jar:/opt/spark/jars/aws-java-sdk-bundle-1.12.262.jar
+      - ./jars/hadoop-aws-3.3.4.jar:/opt/spark/jars/hadoop-aws-3.3.4.jar
+      - ./jars/postgresql-42.7.3.jar:/opt/spark/jars/postgresql-42.7.3.jar
+      
+
+  minio:
+    image: minio/minio
+    container_name: minio
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+    networks:
+      projectnet:
+    ports:
+      - 9001:9001 # MinIO Console
+      - 9000:9000 # MinIO API
+    command: ["server", "/data", "--console-address", ":9001"]
+    volumes:
+      - ./minio_data:/data
+
+  mc:
+    depends_on:
+      - minio
+    image: minio/mc
+    container_name: mc
+    networks:
+      projectnet:
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done;
+      /usr/bin/mc rm -r --force minio/warehouse;
+      /usr/bin/mc mb minio/warehouse;
+      /usr/bin/mc anonymous set public minio/warehouse;
+      tail -f /dev/null
+      "
   postgres:
     image: postgres:17
-    container_name: postgres
+    container_name: population_source
+    networks:
+      projectnet:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -15,3 +110,38 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  trino:
+    image: trinodb/trino:latest
+    container_name: trino
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./etc:/etc/trino
+    restart: unless-stopped
+    networks:
+      projectnet:
+
+  postgres:
+    image: postgres:17
+    container_name: alerts_pg
+    networks:
+      projectnet:
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: alerts
+    ports:
+      - 5433:5432
+    volumes:
+      - ./alerts_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+networks:
+  projectnet:
+    driver: bridge
