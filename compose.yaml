@@ -74,13 +74,13 @@ services:
       - projectnet
 
   airflow-scheduler:
-    image: my-custom-airflow:${AIRFLOW_VERSION:-2.4.1}
+    image: my-custom-airflow:${AIRFLOW_VERSION:-2.8.3}
     container_name: airflow-scheduler
     build:
       context: ./airflow/docker
       dockerfile: Dockerfile
       args:
-        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-2.4.1}
+        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-2.8.3}
     command: scheduler
     healthcheck:
       test: [ "CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"' ]
@@ -103,13 +103,13 @@ services:
       - projectnet
 
   airflow-webserver:
-    image: my-custom-airflow:${AIRFLOW_VERSION:-2.4.1}
+    image: my-custom-airflow:${AIRFLOW_VERSION:-2.8.3}
     container_name: airflow-webserver
     build:
       context: ./airflow/docker
       dockerfile: Dockerfile
       args:
-        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-2.4.1}
+        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-2.8.3}
     command: webserver
     healthcheck:
       test: [ "CMD", "curl", "--fail", "http://localhost:8090/health" ]
@@ -134,13 +134,13 @@ services:
       - projectnet
 
   airflow-init:
-    image: my-custom-airflow:${AIRFLOW_VERSION:-2.4.1}
+    image: my-custom-airflow:${AIRFLOW_VERSION:-2.8.3}
     container_name: airflow-init
     build:
       context: ./airflow/docker
       dockerfile: Dockerfile
       args:
-        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-2.4.1}
+        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-2.8.3}
     entrypoint: /opt/airflow/scripts/entrypoint.sh
     user: "${AIRFLOW_UID:-50000}:0"
     depends_on:
