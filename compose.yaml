@@ -25,6 +25,7 @@ services:
       METASTORE_DB_HOSTNAME: mariadb
     depends_on:
       - mariadb
+      - mc
     networks:
       - projectnet
 
