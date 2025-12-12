@@ -20,3 +20,5 @@ SELECT
     year,
     population
 FROM source_population.public.country_population;
+
+
