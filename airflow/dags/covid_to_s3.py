@@ -110,6 +110,7 @@ with DAG(
         task_id='transform_spark_job',
         conn_id='spark_conn',
         application='/opt/airflow/dags/scripts/process_covid_s3.py',
+        packages="org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.8.1,org.apache.hadoop:hadoop-aws:3.3.4",
         application_args=[
             "{{ task_instance.xcom_pull(task_ids='extract_load_to_minio') }}",
             TARGET_TABLE

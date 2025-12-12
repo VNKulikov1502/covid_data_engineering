@@ -1,4 +1,4 @@
 apache-airflow-providers-trino
 apache-airflow-providers-apache-spark
-pyspark==3.3.2
+pyspark==3.5.5
 pandas

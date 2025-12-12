@@ -36,6 +36,6 @@ airflow connections add 'postgres_population_conn' \
 
 airflow connections add 'spark_conn' \
     --conn-type 'spark' \
-    --conn-host 'spark-iceberg' \
+    --conn-host 'spark://spark-iceberg' \
     --conn-port '7077' \
     || echo "Connection spark_conn already exists"
