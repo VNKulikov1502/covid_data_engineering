@@ -13,6 +13,19 @@ def main():
     # Инициализация Spark Session
     spark = SparkSession.builder \
         .appName("Covid Processing S3") \
+        .config("spark.sql.catalogImplementation", "hive") \
+        .config("spark.hadoop.hive.metastore.uris", "thrift://hive-metastore:9083") \
+        .config("spark.hadoop.hive.metastore.client.capability.check", "false") \
+        .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions") \
+        .config("spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog") \
+        .config("spark.sql.catalog.iceberg.type", "hive") \
+        .config("spark.sql.catalog.iceberg.uri", "thrift://hive-metastore:9083") \
+        .config("spark.sql.catalog.iceberg.warehouse", "s3a://warehouse/") \
+        .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000") \
+        .config("spark.hadoop.fs.s3a.access.key", "admin") \
+        .config("spark.hadoop.fs.s3a.secret.key", "password") \
+        .config("spark.hadoop.fs.s3a.path.style.access", "true") \
+        .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .getOrCreate()
 
     # --- ЧТЕНИЕ АРГУМЕНТОВ ---
@@ -44,12 +57,23 @@ def main():
             .withColumn("ingestion_ts", current_timestamp())
 
         # 4. Пишем в Iceberg
-        # mergeSchema=true позволяет добавлять новые колонки, если они появились в исходном файле
-        df_final.writeTo(target_table) \
-            .option("mergeSchema", "true") \
-            .append()
+        writer = df_final.writeTo(target_table) \
+            .using("iceberg") \
+            .tableProperty("format-version", "2")
 
-        print(f"SUCCESS: Processed {s3_input_path}")
+        # Проверяем, существует ли таблица в каталоге
+        table_exists = spark.catalog.tableExists(target_table)
+
+        if table_exists:
+            # Если таблица существует, просто добавляем данные (APPEND)
+            writer.append()
+            print(f"SUCCESS: Данные добавлены в существующую таблицу {target_table}.")
+        else:
+            # Если таблица не существует, создаем ее (CREATE)
+            writer.create()
+            print(f"SUCCESS: Таблица {target_table} создана и данные записаны.")
+
+            print(f"SUCCESS: Processed {s3_input_path}")
 
     except Exception as e:
         print(f"ERROR: Failed processing {s3_input_path}")

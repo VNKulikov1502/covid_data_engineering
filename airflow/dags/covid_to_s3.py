@@ -6,12 +6,11 @@ from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from datetime import datetime, timedelta
-import socket
 
 # КОНФИГУРАЦИЯ
 DAG_ID = 'covid_enterprise_elt_minimal_spark_conf'
 CURSOR_VAR_NAME = 'simulation_cursor_date'
-TARGET_TABLE = 'raw_catalog.covid.daily_reports'
+TARGET_TABLE = 'iceberg.raw.daily_reports'
 
 # РАЗДЕЛЕНИЕ БАКЕТОВ
 CSV_BUCKET = 'covid-daily-reports-csv' # Бакет для CSV
@@ -111,33 +110,10 @@ with DAG(
         task_id='transform_spark_job',
         conn_id='spark_conn',
         application='/opt/airflow/dags/scripts/process_covid_s3.py',
-        conf={
-            "spark.network.timeout": "600s",           # Увеличиваем сетевой таймаут
-            "spark.executor.heartbeatInterval": "60s", # Интервал heartbeat
-            "spark.cores.max": "1",                    # Ограничиваем ресурсы для теста
-            "spark.executor.memory": "512m",           # Ограничиваем память
-            "spark.driver.memory": "512m"              # Память драйвера
-        },
-        # 2. Явно указываем deploy_mode и verbose
-        deploy_mode="client",  # или "cluster" если Master настроен для кластера
-        verbose=True,
-        # 3. Дополнительные параметры для отладки
-        env_vars={
-            "PYSPARK_PYTHON": "python3",
-            "SPARK_MASTER": "spark://spark-iceberg:7077"
-        },
-        # 4. Параметры для вызова spark-submit
-        jars="",  # Если нужны специфичные JAR-файлы
-        driver_memory="512m",
-        executor_memory="512m",
-        num_executors=1,
-        executor_cores=1,
-        # 5. Отключаем проверки, которые могут мешать
-        name="covid-processor", # Более простое имя приложения
         application_args=[
             "{{ task_instance.xcom_pull(task_ids='extract_load_to_minio') }}",
             TARGET_TABLE
-        ],
+        ]
     )
 
     task_advance = PythonOperator(
