@@ -94,7 +94,7 @@ def main():
         .getOrCreate()
 
     if len(sys.argv) < 3:
-        raise ValueError("Usage: process_covid_s3.py <S3_INPUT_PATH> <TARGET_TABLE>")
+        raise ValueError("Usage: process_covid_raw.py <S3_INPUT_PATH> <TARGET_TABLE>")
 
     s3_input_path = sys.argv[1]
     target_table = sys.argv[2]
