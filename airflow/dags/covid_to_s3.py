@@ -7,25 +7,21 @@ from airflow.operators.python import PythonOperator
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from datetime import datetime, timedelta
 
-# КОНФИГУРАЦИЯ
 DAG_ID = 'covid_enterprise_elt_minimal_spark_conf'
 CURSOR_VAR_NAME = 'simulation_cursor_date'
 TARGET_TABLE = 'iceberg.raw.daily_reports'
 
-# РАЗДЕЛЕНИЕ БАКЕТОВ
-CSV_BUCKET = 'covid-daily-reports-csv' # Бакет для CSV
-WAREHOUSE_BUCKET = 'warehouse'         # Бакет для Iceberg/Parquet
+CSV_BUCKET = 'covid-daily-reports-csv' 
+WAREHOUSE_BUCKET = 'warehouse'        
 
-# Настройки MinIO для Python (boto3)
 MINIO_ENDPOINT = 'http://minio:9000'
 MINIO_ACCESS_KEY = 'admin'
 MINIO_SECRET_KEY = 'password'
 
 
-# Подготовка путей и дат
 def prepare_dates(**kwargs):
     ti = kwargs['ti']
-    current_date_str = Variable.get(CURSOR_VAR_NAME, default_var="2020-01-22")
+    current_date_str = Variable.get(CURSOR_VAR_NAME, default_var="2021-01-22")
     current_date = datetime.strptime(current_date_str, '%Y-%m-%d')
     next_date = current_date + timedelta(days=1)
 
@@ -33,7 +29,6 @@ def prepare_dates(**kwargs):
 
     file_name_github = current_date.strftime('%m-%d-%Y') + ".csv"
 
-    # Путь внутри CSV-бакета
     s3_key = f"year={current_date.year}/month={current_date.month}/{current_date.strftime('%Y-%m-%d')}.csv"
 
     ti.xcom_push(key='github_filename', value=file_name_github)
@@ -41,7 +36,6 @@ def prepare_dates(**kwargs):
     ti.xcom_push(key='next_date_var', value=next_date.strftime('%Y-%m-%d'))
 
 
-# Загрузка CSV в отдельный бакет
 def ingest_github_to_minio(**kwargs):
     ti = kwargs['ti']
     file_name = ti.xcom_pull(task_ids='prepare_dates', key='github_filename')
@@ -63,24 +57,20 @@ def ingest_github_to_minio(**kwargs):
                              aws_secret_access_key=MINIO_SECRET_KEY
                              )
 
-    # Создаем бакет для CSV, если нет
     try:
         s3_client.head_bucket(Bucket=CSV_BUCKET)
     except:
         s3_client.create_bucket(Bucket=CSV_BUCKET)
 
-    # Кладем файл
     s3_client.put_object(
         Bucket=CSV_BUCKET,
         Key=s3_key,
         Body=response.content
     )
 
-    # Возвращаем путь к CSV для Спарка
     return f"s3a://{CSV_BUCKET}/{s3_key}"
 
 
-# Сдвиг даты
 def advance_cursor(**kwargs):
     ti = kwargs['ti']
     next_date_str = ti.xcom_pull(task_ids='prepare_dates', key='next_date_var')

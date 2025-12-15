@@ -38,5 +38,4 @@ airflow connections add 'spark_conn' \
     --conn-type 'spark' \
     --conn-host 'spark://spark-iceberg' \
     --conn-port '7077' \
-    --conn-extra '{"deploy-mode": "cluster", "conf": {"spark.pyspark.python": "python3"}}' \
     || echo "Connection spark_conn already exists"
