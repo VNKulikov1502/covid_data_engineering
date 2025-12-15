@@ -7,7 +7,7 @@ from airflow.operators.python import PythonOperator
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from datetime import datetime, timedelta
 
-DAG_ID = 'covid_enterprise_elt_minimal_spark_conf'
+DAG_ID = 'covid_data_pipeline'
 CURSOR_VAR_NAME = 'simulation_cursor_date'
 TARGET_TABLE = 'iceberg.raw.daily_reports'
 
@@ -107,9 +107,21 @@ with DAG(
         ]
     )
 
+
+    task_build_ods = SparkSubmitOperator(
+    task_id='build_ods_daily_country_stats',
+    conn_id='spark_conn',
+    application='/opt/airflow/dags/scripts/build_ods_daily_stats.py',
+    packages="org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.8.1,org.apache.hadoop:hadoop-aws:3.3.4",
+    application_args=[
+        "{{ var.value.simulation_cursor_date }}"
+    ]
+
+    )
+
     task_advance = PythonOperator(
         task_id='advance_cursor',
         python_callable=advance_cursor
     )
 
-    task_prepare >> task_ingest >> task_transform >> task_advance
+    task_prepare >> task_ingest >> task_transform >> task_build_ods >> task_advance
