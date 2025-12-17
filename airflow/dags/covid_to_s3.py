@@ -11,8 +11,8 @@ DAG_ID = 'covid_data_pipeline'
 CURSOR_VAR_NAME = 'simulation_cursor_date'
 TARGET_TABLE = 'iceberg.raw.daily_reports'
 
-CSV_BUCKET = 'covid-daily-reports-csv' 
-WAREHOUSE_BUCKET = 'warehouse'        
+CSV_BUCKET = 'covid-daily-reports-csv'
+WAREHOUSE_BUCKET = 'warehouse'
 
 MINIO_ENDPOINT = 'http://minio:9000'
 MINIO_ACCESS_KEY = 'admin'
@@ -76,10 +76,13 @@ def advance_cursor(**kwargs):
     next_date_str = ti.xcom_pull(task_ids='prepare_dates', key='next_date_var')
     if next_date_str:
         Variable.set(CURSOR_VAR_NAME, next_date_str)
+        print(f"Курсор обновлен на {next_date_str}")
+
 
 with DAG(
         dag_id=DAG_ID,
-        start_date=datetime(2025, 12, 12),
+        start_date=datetime(2025, 12, 15, 12, 55),
+        # schedule_interval="*/5 * * * *",
         schedule_interval=None,
         catchup=False,
         max_active_runs=1,
@@ -96,10 +99,10 @@ with DAG(
         python_callable=ingest_github_to_minio
     )
 
-    task_transform = SparkSubmitOperator(
-        task_id='transform_spark_job',
+    task_build_raw = SparkSubmitOperator(
+        task_id='build_raw_daily_reports',
         conn_id='spark_conn',
-        application='/opt/airflow/dags/scripts/process_covid_s3.py',
+        application='/opt/airflow/dags/scripts/process_covid_raw.py',
         packages="org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.8.1,org.apache.hadoop:hadoop-aws:3.3.4",
         application_args=[
             "{{ task_instance.xcom_pull(task_ids='extract_load_to_minio') }}",
@@ -109,14 +112,23 @@ with DAG(
 
 
     task_build_ods = SparkSubmitOperator(
-    task_id='build_ods_daily_country_stats',
-    conn_id='spark_conn',
-    application='/opt/airflow/dags/scripts/build_ods_daily_stats.py',
-    packages="org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.8.1,org.apache.hadoop:hadoop-aws:3.3.4",
-    application_args=[
-        "{{ var.value.simulation_cursor_date }}"
-    ]
-
+        task_id='build_ods_daily_country_stats',
+        conn_id='spark_conn',
+        application='/opt/airflow/dags/scripts/process_covid_ods.py',
+        packages="org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.8.1,org.apache.hadoop:hadoop-aws:3.3.4",
+        application_args=[
+            "{{ var.value.simulation_cursor_date }}"
+        ]
+    )
+    
+    task_build_dds = SparkSubmitOperator(
+        task_id='build_dds_star_schema',
+        conn_id='spark_conn',
+        application='/opt/airflow/dags/scripts/process_covid_dds.py',
+        packages="org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.8.1,org.apache.hadoop:hadoop-aws:3.3.4",
+        application_args=[
+            "{{ var.value.simulation_cursor_date }}"
+        ]
     )
 
     task_advance = PythonOperator(
@@ -124,4 +136,4 @@ with DAG(
         python_callable=advance_cursor
     )
 
-    task_prepare >> task_ingest >> task_transform >> task_build_ods >> task_advance
+    task_prepare >> task_ingest >> task_build_raw >> task_build_ods >> task_build_dds >> task_advance
