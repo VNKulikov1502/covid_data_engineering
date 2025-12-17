@@ -12,22 +12,19 @@ ALERT_DATE = datetime.strptime(Variable.get("simulation_cursor_date"), "%Y-%m-%d
 
 def create_postgres_schema_and_table():
     pg_hook = PostgresHook(postgres_conn_id="postgres_alerts_conn")
-    create_schema_sql = "CREATE SCHEMA IF NOT EXISTS alerts;"
-    create_table_sql = """
-    CREATE TABLE IF NOT EXISTS alerts.covid_alerts (
-        alert_id BIGSERIAL PRIMARY KEY,
-        alert_date DATE NOT NULL,
-        country TEXT NOT NULL,
-        alert_type TEXT NOT NULL,
-        severity TEXT NOT NULL,
-        metric_value DOUBLE PRECISION,
-        description TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    """
-    pg_hook.run(create_schema_sql)
-    pg_hook.run(create_table_sql)
-
+    pg_hook.run("CREATE SCHEMA IF NOT EXISTS alerts;")
+    pg_hook.run("""
+        CREATE TABLE IF NOT EXISTS alerts.covid_alerts (
+            alert_id BIGSERIAL PRIMARY KEY,
+            alert_date DATE NOT NULL,
+            country TEXT NOT NULL,
+            alert_type TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            metric_value DOUBLE PRECISION,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
 
 def run_trino_sql(filename):
     trino_hook = TrinoHook(trino_conn_id="trino_conn")
@@ -39,29 +36,26 @@ def run_trino_sql(filename):
 
 def notify_new_alerts():
     pg_hook = PostgresHook(postgres_conn_id="postgres_alerts_conn")
-    
     query = f"""
-        SELECT country, alert_type, severity, description
+        SELECT country, alert_type, severity, metric_value, description
         FROM alerts.covid_alerts
         WHERE alert_date = DATE '{ALERT_DATE}'
     """
     new_alerts = pg_hook.get_records(query)
     
     if new_alerts:
-        message = "<h3>Появились новые COVID алерты за {}</h3><ul>".format(ALERT_DATE)
-        for country, alert_type, severity, metric_value in new_alerts:
-            message += f"<li>{country}: {alert_type} ({severity}), значение: {metric_value}</li>"
+        message = f"<h3>Появились новые COVID алерты за {ALERT_DATE}</h3><ul>"
+        for country, alert_type, severity, metric_value, description in new_alerts:
+            message += f"<li>{country}: {alert_type} ({severity}), значение: {metric_value}, описание: {description}</li>"
         message += "</ul>"
         
         send_email_smtp(
             to="kulikoff1502@gmail.com",
             subject=f"Новые COVID алерты за {ALERT_DATE}",
-            html_content=message,
-            conn_id="smtp_default"
+            html_content=message
         )
     else:
         print(f"Новых алертов за {ALERT_DATE} нет.")
-
 
 with DAG(
     dag_id="covid_alerts_pipeline",
@@ -101,8 +95,8 @@ with DAG(
     )
 
     notify_alerts_task = PythonOperator(
-    task_id="notify_new_alerts",
-    python_callable=notify_new_alerts
+        task_id="notify_new_alerts",
+        python_callable=notify_new_alerts
     )
 
     create_table_task >> [case_spike_alert, death_spike_alert, incidence_alert, high_mortality_alert] >> notify_alerts_task
