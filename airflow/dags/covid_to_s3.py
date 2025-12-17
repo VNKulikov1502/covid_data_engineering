@@ -6,6 +6,7 @@ from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from datetime import datetime, timedelta
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 DAG_ID = 'covid_data_pipeline'
 CURSOR_VAR_NAME = 'simulation_cursor_date'
@@ -158,8 +159,15 @@ with DAG(
         python_callable=advance_cursor
     )
 
+    trigger_alerts_pipeline = TriggerDagRunOperator(
+        task_id="trigger_covid_alerts_pipeline",
+        trigger_dag_id="covid_alerts_pipeline",
+        wait_for_completion=False, 
+        reset_dag_run=True, 
+    )
+
     task_init_cursor >> task_prepare >> task_ingest
 
     task_ingest >> task_build_raw >> task_build_ods >> task_build_dds >> task_build_data_mart
 
-    task_build_data_mart >> task_advance
+    task_build_data_mart >> task_advance >> trigger_alerts_pipeline

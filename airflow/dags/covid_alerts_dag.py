@@ -99,4 +99,6 @@ with DAG(
         python_callable=notify_new_alerts
     )
 
-    create_table_task >> [case_spike_alert, death_spike_alert, incidence_alert, high_mortality_alert] >> notify_alerts_task
+    create_table_task >> [
+        case_spike_alert, death_spike_alert, incidence_alert, high_mortality_alert
+        ] >> notify_alerts_task
