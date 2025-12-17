@@ -18,10 +18,18 @@ MINIO_ENDPOINT = 'http://minio:9000'
 MINIO_ACCESS_KEY = 'admin'
 MINIO_SECRET_KEY = 'password'
 
+def initialize_cursor_if_missing():
+    default_start_date = "2021-01-22"
+    try:
+        Variable.get(CURSOR_VAR_NAME)
+        print(f"Переменная {CURSOR_VAR_NAME} уже существует.")
+    except KeyError:
+        Variable.set(CURSOR_VAR_NAME, default_start_date)
+        print(f"Переменная {CURSOR_VAR_NAME} инициализирована значением: {default_start_date}")
 
 def prepare_dates(**kwargs):
     ti = kwargs['ti']
-    current_date_str = Variable.get(CURSOR_VAR_NAME, default_var="2021-01-22")
+    current_date_str = Variable.get(CURSOR_VAR_NAME)
     current_date = datetime.strptime(current_date_str, '%Y-%m-%d')
     next_date = current_date + timedelta(days=1)
 
@@ -88,6 +96,11 @@ with DAG(
         tags=['ELT', 'covid', 'spark']
 ) as dag:
 
+    task_init_cursor = PythonOperator(
+        task_id='initialize_cursor_variable',
+        python_callable=initialize_cursor_if_missing
+    )
+
     task_prepare = PythonOperator(
         task_id='prepare_dates',
         python_callable=prepare_dates
@@ -122,11 +135,22 @@ with DAG(
         ]
     )
 
-    # 3. DDS Layer (НОВЫЙ ТАСК)
+    # 3. DDS Layer
     task_build_dds = SparkSubmitOperator(
         task_id='build_dds_star_schema',
         conn_id='spark_conn',
         application='/opt/airflow/dags/scripts/process_covid_dds.py',
+        packages="org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.8.1,org.apache.hadoop:hadoop-aws:3.3.4",
+        application_args=[
+            "{{ var.value.simulation_cursor_date }}"
+        ]
+    )
+
+    # 4. Data Mart
+    task_build_data_mart = SparkSubmitOperator(
+        task_id='build_data_mart',
+        conn_id='spark_conn',
+        application='/opt/airflow/dags/scripts/process_covid_data_mart.py',
         packages="org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.8.1,org.apache.hadoop:hadoop-aws:3.3.4",
         application_args=[
             "{{ var.value.simulation_cursor_date }}"
@@ -138,4 +162,11 @@ with DAG(
         python_callable=advance_cursor
     )
 
-    task_prepare >> task_ingest >> task_build_raw >> task_build_ods >> task_build_dds >> task_advance
+    # Инициализация и подготовка
+    task_init_cursor >> task_prepare >> task_ingest
+
+    # ETL/ELT Слои (Трансформация)
+    task_ingest >> task_build_raw >> task_build_ods >> task_build_dds >> task_build_data_mart
+
+    # Обновление курсора
+    task_build_data_mart >> task_advance
