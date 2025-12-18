@@ -43,8 +43,6 @@ def notify_new_alerts():
         WHERE alert_date = DATE '{ALERT_DATE}'
     """
     new_alerts = pg_hook.get_records(query)
-    emails_str = Variable.get("emails")
-    email_list = ast.literal_eval(emails_str)
     
     if new_alerts:
         message = f"<h3>Появились новые COVID алерты за {ALERT_DATE}</h3><ul>"
@@ -53,7 +51,7 @@ def notify_new_alerts():
         message += "</ul>"
         
         send_email_smtp(
-            to=email_list,
+            to=Variable.get("emails", deserialize_json=True),
             subject=f"Новые COVID алерты за {ALERT_DATE}",
             html_content=message
         )
