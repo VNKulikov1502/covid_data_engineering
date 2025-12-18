@@ -7,35 +7,57 @@ INSERT INTO alerts.alerts.covid_alerts (
     description
 )
 SELECT
-    report_date,
-    country_region,
-    'DEATH_SPIKE',
-    'CRITICAL',
-    deaths,
+    t.report_date AS alert_date,
+    t.country_name AS country,
+    'DEATH_RATE_POPULATION' AS alert_type,
+    'HIGH' AS severity,
+    t.new_deaths_today AS metric_value,
     format(
-        'COVID death spike: %s today vs %s yesterday',
-        deaths,
-        deaths_yesterday
-    )
+        'COVID death alert: %.5f%% of population died today (%s new deaths)',
+        t.death_rate * 100,
+        t.new_deaths_today
+    ) AS description
 FROM (
     SELECT
-        report_date,
-        country_region,
-        deaths,
-        LAG(deaths) OVER (
-            PARTITION BY country_region
-            ORDER BY report_date
-        ) AS deaths_yesterday
-    FROM iceberg.ods.daily_country_stats
+        f.report_date,
+        f.location_key,
+        dl.country_name,
+        dl.population,
+
+        f.deaths AS deaths_today,
+        LAG(f.deaths) OVER (
+            PARTITION BY f.location_key
+            ORDER BY f.report_date
+        ) AS deaths_yesterday,
+
+        f.deaths
+          - LAG(f.deaths) OVER (
+                PARTITION BY f.location_key
+                ORDER BY f.report_date
+            ) AS new_deaths_today,
+
+        CAST(
+            f.deaths
+              - LAG(f.deaths) OVER (
+                    PARTITION BY f.location_key
+                    ORDER BY f.report_date
+                )
+            AS DOUBLE
+        ) / dl.population AS death_rate
+
+    FROM iceberg.dds.fact_covid f
+    JOIN iceberg.dds.dim_location dl
+        ON f.location_key = dl.location_key
 ) t
-WHERE report_date = DATE '{{ alert_date }}'
-  AND deaths_yesterday IS NOT NULL
-  AND deaths > deaths_yesterday * 1.3
-  AND deaths >= 50
+WHERE t.report_date = DATE '{{ alert_date }}'
+  AND t.deaths_yesterday IS NOT NULL
+  AND t.new_deaths_today > 0
+  AND t.population > 0
+  AND t.death_rate >= 0.0000005
   AND NOT EXISTS (
       SELECT 1
       FROM alerts.alerts.covid_alerts a
       WHERE a.alert_date = t.report_date
-        AND a.country = t.country_region
-        AND a.alert_type = 'DEATH_SPIKE'
+        AND a.country = t.country_name
+        AND a.alert_type = 'DEATH_RATE_POPULATION'
   )

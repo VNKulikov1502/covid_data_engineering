@@ -7,35 +7,44 @@ INSERT INTO alerts.alerts.covid_alerts (
     description
 )
 SELECT
-    t.report_date,
-    t.country_region,
-    'DEATH_SPIKE_100K',
-    'HIGH',
-    ((t.deaths - t.deaths_yesterday) * 100000.0 / d.population),
+    t.report_date AS alert_date,
+    t.country_name AS country,
+    'DEATH_SPIKE_100K' AS alert_type,
+    'HIGH' AS severity,
+    t.deaths_per_100k AS metric_value,
     format(
-        'High daily COVID mortality: %s per 100k population',
-        ((t.deaths - t.deaths_yesterday) * 100000.0 / d.population)
-    )
+        'High daily COVID mortality: %.2f per 100k population',
+        t.deaths_per_100k
+    ) AS description
 FROM (
     SELECT
-        report_date,
-        country_region,
-        deaths,
-        LAG(deaths) OVER (
-            PARTITION BY country_region
-            ORDER BY report_date
-        ) AS deaths_yesterday
-    FROM iceberg.ods.daily_country_stats
+        f.report_date,
+        f.location_key,
+        dl.country_name,
+        dl.population,
+
+        f.deaths,
+        LAG(f.deaths) OVER (
+            PARTITION BY f.location_key
+            ORDER BY f.report_date
+        ) AS deaths_yesterday,
+
+        CAST(f.deaths - LAG(f.deaths) OVER (
+            PARTITION BY f.location_key
+            ORDER BY f.report_date
+        ) AS DOUBLE) * 100000.0 / dl.population AS deaths_per_100k
+
+    FROM iceberg.dds.fact_covid f
+    JOIN iceberg.dds.dim_location dl
+        ON f.location_key = dl.location_key
 ) t
-JOIN iceberg.dds.dim_location d
-    ON t.country_region = d.country_name
 WHERE t.report_date = DATE '{{ alert_date }}'
   AND t.deaths_yesterday IS NOT NULL
-  AND (t.deaths - t.deaths_yesterday) * 100000.0 / d.population > 1
+  AND t.deaths_per_100k > 1
   AND NOT EXISTS (
       SELECT 1
       FROM alerts.alerts.covid_alerts a
       WHERE a.alert_date = t.report_date
-        AND a.country = t.country_region
+        AND a.country = t.country_name
         AND a.alert_type = 'DEATH_SPIKE_100K'
   )

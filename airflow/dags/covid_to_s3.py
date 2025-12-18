@@ -90,7 +90,7 @@ def advance_cursor(**kwargs):
 
 with DAG(
         dag_id=DAG_ID,
-        start_date=datetime(2025, 12, 12),
+        start_date=datetime(2025, 12, 18, 12, 10),
         schedule_interval=None,
         catchup=False,
         max_active_runs=1,
