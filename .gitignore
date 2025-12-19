@@ -38,7 +38,6 @@ Thumbs.db
 logs/
 
 # Database
-*.db
 *.sqlite3
 *.ms
 
@@ -47,9 +46,15 @@ logs/
 .env
 *.log
 
+# Storage
 /minio_data
 /population_data
 /alerts_data
-/airflow/airflow-db-data/
-/superset/superset-data
+
+# Airflow
+/airflow/airflow-db-data
+
+# Superset
+/superset/superset-data/.cache
+/superset/superset-data/.bash_history
 /superset/superset-db-data

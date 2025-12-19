@@ -6,6 +6,12 @@
 ### В нём реализован сбор и обработка данных связанных с эпидемией covid-19
 
 #### Стек используемых технологий: S3(MinIO) + Iceberg, Spark, PostgreSQL, Trino, Docker, Python, Airflow, Superset
+
+#### Архитектура
+
+![Architecture](https://github.com/bouncerist/images/blob/superset-covid/covid_pipeline_architecture.png)
+
+
 #### Для запуска необходимо поднять все сервисы в docker:
 
 ```commandline
@@ -21,6 +27,10 @@ docker-compose up -d
 #### dags/covid_to_s3.py - получает из GitHub CSV-файлы, где хранятся отчеты, например (2020-01-22.csv) и очищает эти данные, создавая новые слои в хранилище S3. Iceberg.raw: данные "как есть", iceberg.ods - очищенные данные, iceberg.dds - данные о covid и population в схеме звезды и уже в iceberg.data_mart готовые для анализа данные. Создание и обработка всех слоёв нарочно созданы в одном DAG для имитации ежедневной загрузки, разумеется, для "боевого режима" ежедневной обработки желательно разделить обработку слоёв на разные DAGs.
 
 #### dags/covid_alerts_dag.py - анализирует данные с помощью SQL-запросов на Trino (сами запросы в dags/sql/) в слое dds и прислыает alerts на целевые emails в случае обнаружения вспышек заболеваемости/смертности в процентном соотношении к населению страны.
+##### Пример сообщения, который приходит на Email
+
+![Email_example](https://github.com/bouncerist/images/blob/superset-covid/example_covid_email_alerts.jpg)
+
 
 ### Spark:
 
@@ -33,3 +43,8 @@ docker-compose up -d
 ### Superset:
 
 #### С помощью сервиса Superset создаются дашборды и визуализируются данные из iceberg.data_mart, подключение к которому реализуется с помощью Trino. Здесь наглядно можно увидеть распределение заболеваемости/смертности по карте мира, а так же график заболеваемости/смертности с течением времени.
+
+#### Дашборды:
+
+![Superset_dashboards_1](https://github.com/bouncerist/images/blob/superset-covid/dashboard-covid-1.jpg)
+![Superset_dashboards_2](https://github.com/bouncerist/images/blob/superset-covid/dashboard-covid-2.jpg)
