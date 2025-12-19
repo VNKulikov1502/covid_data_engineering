@@ -96,8 +96,8 @@ services:
     depends_on:
       airflow-metadata:
         condition: service_healthy
-#      airflow-init:
-#        condition: service_completed_successfully
+      airflow-init:
+        condition: service_completed_successfully
     env_file:
       - airflow/airflow.env
     volumes:
@@ -126,8 +126,8 @@ services:
     depends_on:
       airflow-metadata:
         condition: service_healthy
-#      airflow-init:
-#        condition: service_completed_successfully
+      airflow-init:
+        condition: service_completed_successfully
     env_file:
       - airflow/airflow.env
     volumes:
@@ -138,32 +138,32 @@ services:
     networks:
       - projectnet
 
-#  airflow-init:
-#    image: my-custom-airflow:${AIRFLOW_VERSION:-2.8.3}
-#    container_name: airflow-init
-#    build:
-#      context: ./airflow/docker
-#      dockerfile: Dockerfile
-#      args:
-#        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-2.8.3}
-#    entrypoint: /opt/airflow/scripts/entrypoint.sh
-#    user: "${AIRFLOW_UID:-50000}:0"
-#    depends_on:
-#      airflow-metadata:
-#        condition: service_healthy
-#    env_file:
-#      - airflow/airflow.env
-#    environment:
-#      _AIRFLOW_WWW_USER_USERNAME: airflow_user
-#      _AIRFLOW_WWW_USER_FIRSTNAME: Airflow
-#      _AIRFLOW_WWW_USER_LASTNAME: Admin
-#      _AIRFLOW_WWW_USER_EMAIL: airflowadmin@example.com
-#      _AIRFLOW_WWW_USER_ROLE: Admin
-#      _AIRFLOW_WWW_USER_PASSWORD: airflow_password
-#    volumes:
-#      - ./airflow/scripts:/opt/airflow/scripts
-#    networks:
-#      - projectnet
+  airflow-init:
+    image: my-custom-airflow:${AIRFLOW_VERSION:-2.8.3}
+    container_name: airflow-init
+    build:
+      context: ./airflow/docker
+      dockerfile: Dockerfile
+      args:
+        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-2.8.3}
+    entrypoint: /opt/airflow/scripts/entrypoint.sh
+    user: "${AIRFLOW_UID:-50000}:0"
+    depends_on:
+      airflow-metadata:
+        condition: service_healthy
+    env_file:
+      - airflow/airflow.env
+    environment:
+      _AIRFLOW_WWW_USER_USERNAME: airflow_user
+      _AIRFLOW_WWW_USER_FIRSTNAME: Airflow
+      _AIRFLOW_WWW_USER_LASTNAME: Admin
+      _AIRFLOW_WWW_USER_EMAIL: airflowadmin@example.com
+      _AIRFLOW_WWW_USER_ROLE: Admin
+      _AIRFLOW_WWW_USER_PASSWORD: airflow_password
+    volumes:
+      - ./airflow/scripts:/opt/airflow/scripts
+    networks:
+      - projectnet
 
   minio:
     image: minio/minio
