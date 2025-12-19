@@ -6,6 +6,7 @@ from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from datetime import datetime, timedelta
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 DAG_ID = 'covid_data_pipeline'
 CURSOR_VAR_NAME = 'simulation_cursor_date'
@@ -19,7 +20,7 @@ MINIO_ACCESS_KEY = 'admin'
 MINIO_SECRET_KEY = 'password'
 
 def initialize_cursor_if_missing():
-    default_start_date = "2021-01-22"
+    default_start_date = "2020-01-22"
     try:
         Variable.get(CURSOR_VAR_NAME)
         print(f"Переменная {CURSOR_VAR_NAME} уже существует.")
@@ -111,7 +112,6 @@ with DAG(
         python_callable=ingest_github_to_minio
     )
 
-    # 1. RAW Layer
     task_build_raw = SparkSubmitOperator(
         task_id='build_raw_daily_reports',
         conn_id='spark_conn',
@@ -124,7 +124,6 @@ with DAG(
     )
 
 
-    # 2. ODS Layer
     task_build_ods = SparkSubmitOperator(
         task_id='build_ods_daily_country_stats',
         conn_id='spark_conn',
@@ -135,7 +134,6 @@ with DAG(
         ]
     )
 
-    # 3. DDS Layer
     task_build_dds = SparkSubmitOperator(
         task_id='build_dds_star_schema',
         conn_id='spark_conn',
@@ -146,7 +144,6 @@ with DAG(
         ]
     )
 
-    # 4. Data Mart
     task_build_data_mart = SparkSubmitOperator(
         task_id='build_data_mart',
         conn_id='spark_conn',
@@ -162,11 +159,15 @@ with DAG(
         python_callable=advance_cursor
     )
 
-    # Инициализация и подготовка
+    trigger_alerts_pipeline = TriggerDagRunOperator(
+        task_id="trigger_covid_alerts_pipeline",
+        trigger_dag_id="covid_alerts_pipeline",
+        wait_for_completion=False,
+        reset_dag_run=True,
+    )
+
     task_init_cursor >> task_prepare >> task_ingest
 
-    # ETL/ELT Слои (Трансформация)
     task_ingest >> task_build_raw >> task_build_ods >> task_build_dds >> task_build_data_mart
 
-    # Обновление курсора
-    task_build_data_mart >> task_advance
+    task_build_data_mart >> task_advance >> trigger_alerts_pipeline

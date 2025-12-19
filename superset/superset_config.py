@@ -1,0 +1,1 @@
+SESSION_COOKIE_NAME = 'superset_session'

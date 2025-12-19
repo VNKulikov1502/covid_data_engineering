@@ -1,10 +1,10 @@
 services:
   mariadb:
-    image: 'mariadb:10.11.2-jammy'
+    image: mariadb:10.11.2-jammy
     hostname: mariadb
     container_name: mariadb
     ports:
-      - '3306:3306'
+      - 3306:3306
     environment:
       MYSQL_ROOT_PASSWORD: admin
       MYSQL_USER: admin
@@ -16,7 +16,7 @@ services:
   hive-metastore:
     hostname: hive-metastore
     container_name: hive-metastore
-    image: 'bitsondatadev/hive-metastore:latest'
+    image: bitsondatadev/hive-metastore:latest
     ports:
       - '9083:9083' # Metastore Thrift
     volumes:
@@ -96,8 +96,8 @@ services:
     depends_on:
       airflow-metadata:
         condition: service_healthy
-      airflow-init:
-        condition: service_completed_successfully
+#      airflow-init:
+#        condition: service_completed_successfully
     env_file:
       - airflow/airflow.env
     volumes:
@@ -126,8 +126,8 @@ services:
     depends_on:
       airflow-metadata:
         condition: service_healthy
-      airflow-init:
-        condition: service_completed_successfully
+#      airflow-init:
+#        condition: service_completed_successfully
     env_file:
       - airflow/airflow.env
     volumes:
@@ -138,32 +138,32 @@ services:
     networks:
       - projectnet
 
-  airflow-init:
-    image: my-custom-airflow:${AIRFLOW_VERSION:-2.8.3}
-    container_name: airflow-init
-    build:
-      context: ./airflow/docker
-      dockerfile: Dockerfile
-      args:
-        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-2.8.3}
-    entrypoint: /opt/airflow/scripts/entrypoint.sh
-    user: "${AIRFLOW_UID:-50000}:0"
-    depends_on:
-      airflow-metadata:
-        condition: service_healthy
-    env_file:
-      - airflow/airflow.env
-    environment:
-      _AIRFLOW_WWW_USER_USERNAME: airflow_user
-      _AIRFLOW_WWW_USER_FIRSTNAME: Airflow
-      _AIRFLOW_WWW_USER_LASTNAME: Admin
-      _AIRFLOW_WWW_USER_EMAIL: airflowadmin@example.com
-      _AIRFLOW_WWW_USER_ROLE: Admin
-      _AIRFLOW_WWW_USER_PASSWORD: airflow_password
-    volumes:
-      - ./airflow/scripts:/opt/airflow/scripts
-    networks:
-      - projectnet
+#  airflow-init:
+#    image: my-custom-airflow:${AIRFLOW_VERSION:-2.8.3}
+#    container_name: airflow-init
+#    build:
+#      context: ./airflow/docker
+#      dockerfile: Dockerfile
+#      args:
+#        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-2.8.3}
+#    entrypoint: /opt/airflow/scripts/entrypoint.sh
+#    user: "${AIRFLOW_UID:-50000}:0"
+#    depends_on:
+#      airflow-metadata:
+#        condition: service_healthy
+#    env_file:
+#      - airflow/airflow.env
+#    environment:
+#      _AIRFLOW_WWW_USER_USERNAME: airflow_user
+#      _AIRFLOW_WWW_USER_FIRSTNAME: Airflow
+#      _AIRFLOW_WWW_USER_LASTNAME: Admin
+#      _AIRFLOW_WWW_USER_EMAIL: airflowadmin@example.com
+#      _AIRFLOW_WWW_USER_ROLE: Admin
+#      _AIRFLOW_WWW_USER_PASSWORD: airflow_password
+#    volumes:
+#      - ./airflow/scripts:/opt/airflow/scripts
+#    networks:
+#      - projectnet
 
   minio:
     image: minio/minio
@@ -178,8 +178,6 @@ services:
       - 9001:9001 # MinIO Console
       - 9000:9000 # MinIO API
     command: ["server", "/data", "--console-address", ":9001"]
-    volumes:
-      - ./minio_data:/data
 
   mc:
     depends_on:
@@ -292,6 +290,7 @@ services:
     volumes:
       - ./superset/superset-data:/app/superset_home
       - ./superset/init-superset.sh:/app/init-superset.sh
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py
     command: [ "sh", "/app/init-superset.sh" ]
     networks:
       - projectnet
